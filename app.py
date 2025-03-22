@@ -1,89 +1,47 @@
 import streamlit as st
-import sounddevice as sd
-import numpy as np
+from audio_recorder_streamlit import audio_recorder
 import scipy.io.wavfile as wav
 import speech_recognition as sr
-import torch
 from transformers import pipeline
+import torch
 
-# 📌 Ses parametreleri
-SAMPLE_RATE = 44100
-SILENCE_DURATION = 1
-CHUNK_DURATION = 0.5
-SILENCE_THRESHOLD = 25000
+# Streamlit başlık
+st.set_page_config(page_title="🎤 Sesli Duygu Analizi")
+st.title("🎤 İngilizce Sesli Duygu Analizi")
+st.markdown("Tarayıcı mikrofonunuzu kullanarak ses kaydedin, konuşmanız analiz edilsin!")
 
-# Sessizlik kontrolü
-def is_silent(data, threshold=SILENCE_THRESHOLD):
-    volume_norm = np.linalg.norm(data)
-    return volume_norm < threshold
+# Ses kaydı başlat
+audio_bytes = audio_recorder(text=" Kayıt için mikrofona tıklayınız", icon_size="2x")
 
-# Ses kaydı
-def record_audio():
-    st.info("🎙 Kayıt başladı. Sessizlik algılanınca duracak...")
-    recording = []
-    silent_duration = 0
-    chunk_samples = int(SAMPLE_RATE * CHUNK_DURATION)
 
-    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype='int16') as stream:
-        while True:
-            data, _ = stream.read(chunk_samples)
-            recording.append(data.copy())
+if audio_bytes:
+    filename = "kayit.wav"
+    with open(filename, "wb") as f:
+        f.write(audio_bytes)
+    st.success("✅ Kayıt alındı!")
 
-            if is_silent(data):
-                silent_duration += CHUNK_DURATION
-            else:
-                silent_duration = 0
-
-            if silent_duration >= SILENCE_DURATION:
-                break
-
-    audio_data = np.concatenate(recording, axis=0)
-    filename = "recorded_audio.wav"
-    wav.write(filename, SAMPLE_RATE, audio_data)
-    return filename
-
-# Speech-to-text (Google)
-def transcribe_audio(audio_file):
+    # Transkripsiyon
     recognizer = sr.Recognizer()
-    with sr.AudioFile(audio_file) as source:
+    with sr.AudioFile(filename) as source:
         audio_data = recognizer.record(source)
 
     try:
         text = recognizer.recognize_google(audio_data, language="en")
-        return text
-    except sr.UnknownValueError:
-        return "Google Speech Recognition sesi anlayamadı."
-    except sr.RequestError as e:
-        return f"Google Speech Recognition hizmetine erişilemiyor: {e}"
-
-# Duygu analizi
-def analyze_sentiment(text):
-    sentiment_pipeline = pipeline(
-        "sentiment-analysis",
-        model="cardiffnlp/twitter-xlm-roberta-base-sentiment",
-        framework="pt"
-    )
-    return sentiment_pipeline(text)
-
-# ---------------- STREAMLIT ----------------
-
-st.set_page_config(page_title="🎤 İngilizce Sesli Duygu Analizi", layout="centered")
-st.title("🎤 İngilizce Sesli Duygu Analizi")
-st.markdown("Bu uygulama ile sesinizi kaydedebilir, metne dönüştürebilir ve otomatik duygu analizi yaptırabilirsiniz.")
-
-if st.button("🎙 Kayıt Başlat"):
-    with st.spinner("Kayıt yapılıyor..."):
-        audio_file = record_audio()
-    st.success("✅ Kayıt tamamlandı!")
-
-    with st.spinner("Metne dönüştürülüyor..."):
-        text = transcribe_audio(audio_file)
         st.markdown("**Transkripsiyon:**")
         st.code(text)
+    except Exception as e:
+        st.error(f"Transkripsiyon hatası: {e}")
+        text = ""
 
-    with st.spinner("Duygu analizi yapılıyor..."):
-        sentiment = analyze_sentiment(text)
+    # Duygu analizi
+    if text:
+        sentiment_pipeline = pipeline(
+            "sentiment-analysis",
+            model="cardiffnlp/twitter-xlm-roberta-base-sentiment",
+            framework="pt"
+        )
 
+        sentiment = sentiment_pipeline(text)
         label = sentiment[0]['label'].lower()
         score = sentiment[0]['score']
         score_percent = f"%{score * 100:.2f}"
@@ -111,5 +69,9 @@ if st.button("🎙 Kayıt Başlat"):
             """,
             unsafe_allow_html=True
         )
+
+
+
+
 
 
