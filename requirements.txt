@@ -1,0 +1,7 @@
+streamlit
+sounddevice
+numpy
+scipy
+speechrecognition
+transformers
+torch
