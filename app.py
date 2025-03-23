@@ -42,19 +42,30 @@ if audio_bytes:
             sentiment_pipeline = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer)
 
             result = sentiment_pipeline(text)[0]
-            label = result["label"].lower()
+            raw_label = result["label"]
             score = result["score"] * 100
+
+            # Model etiketlerini insan okunur etiketlere çevir
+            label_map = {
+                "LABEL_0": "negative",
+                "LABEL_1": "neutral",
+                "LABEL_2": "positive"
+            }
+            label = label_map.get(raw_label, "unknown")
 
             # Renkler ve emojiler
             if label == "positive":
-                bg_color = "#0b3c2e"  # koyu yeşil
+                bg_color = "#0b3c2e"
                 emoji = "😊"
             elif label == "negative":
-                bg_color = "#4b1c1c"  # koyu kırmızı
+                bg_color = "#4b1c1c"
                 emoji = "😠"
-            elif label == "neutral":  # neutral
-                bg_color = "#1a2f4f"  # koyu mavi
+            elif label == "neutral":
+                bg_color = "#1a2f4f"
                 emoji = "😐"
+            else:
+                bg_color = "#444444"
+                emoji = "❓"
 
             # Sonucu göster
             st.markdown("### 💬 Sentiment Analysis")
