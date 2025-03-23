@@ -4,22 +4,23 @@ import speech_recognition as sr
 from transformers import pipeline
 import tempfile
 
+# Sayfa başlığı ve açıklama
 st.set_page_config(page_title="🎤 Voice Sentiment Analysis")
 st.title("🎤 Voice Sentiment Analysis")
-st.markdown("Click the microphone below to record your voice. Wait and let us analyze it!")
+st.markdown("Welcome! Click the microphone icon below to record your speech and wait for the analysis to complete.")
 
-# Mikrofonla kayıt
+# Ses kaydı başlat
 audio_bytes = audio_recorder(pause_threshold=2.0, sample_rate=44100)
 
 if audio_bytes:
-    st.success("✅ Audio recorded!")
+    st.success("✅ Audio received!")
 
-    # Geçici WAV dosyası
+    # Geçici .wav dosyasına yaz
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
 
-    # Transkripsiyon
+    # Speech-to-text (Google API)
     recognizer = sr.Recognizer()
     with sr.AudioFile(tmp_path) as source:
         audio = recognizer.record(source)
@@ -32,22 +33,33 @@ if audio_bytes:
         st.error(f"Transcription failed: {e}")
         text = ""
 
-    # Duygu analizi
+    # Duygu Analizi
     if text:
-        sentiment_pipeline = pipeline("sentiment-analysis")
-        result = sentiment_pipeline(text)[0]
+        sentiment = pipeline("sentiment-analysis")(text)[0]
 
-        label = result["label"]
-        score = result["score"] * 100
+        label = sentiment["label"]
+        score = sentiment["score"] * 100
 
         emoji = "😐"
+        color = "#f0f0f0"
         if label.lower() == "positive":
             emoji = "😊"
+            color = "#d4edda"
         elif label.lower() == "negative":
             emoji = "😠"
+            color = "#f8d7da"
 
         st.markdown("### 💬 Sentiment Analysis")
-        st.markdown(f"**Sentiment:** {label} {emoji}  \n**Confidence:** {score:.2f}%")
+        st.markdown(
+            f"""
+            <div style="background-color: {color}; padding: 20px; border-radius: 10px;">
+                <strong>Sentiment:</strong> {label} {emoji}<br>
+                <strong>Confidence:</strong> {score:.2f}%
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 
 
 
