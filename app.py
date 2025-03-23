@@ -8,7 +8,7 @@ import torch
 # Streamlit başlık
 st.set_page_config(page_title="🎤 Sesli Duygu Analizi")
 st.title("🎤 İngilizce Sesli Duygu Analizi")
-st.markdown("Tarayıcı mikrofonunuzu kullanarak ses kaydedin, konuşmanız analiz edilsin!")
+st.markdown("Speech to text sentiment analysis")
 
 # Ses kaydı başlat
 audio_bytes = audio_recorder(text=" Kayıt için mikrofona tıklayınız", icon_size="2x")
