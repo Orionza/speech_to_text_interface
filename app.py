@@ -1,69 +1,96 @@
 import streamlit as st
-from audio_recorder_streamlit import audio_recorder
-import scipy.io.wavfile as wav
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import av
+import numpy as np
+import wave
 import speech_recognition as sr
 from transformers import pipeline
-import torch
+import tempfile
 
-# Page settings
 st.set_page_config(page_title="🎤 Voice Sentiment Analysis", layout="centered")
 st.title("🎤 Voice Sentiment Analysis")
-st.markdown("Welcome! Click the microphone icon below to record your speech and wait for the analysis to complete.")
+st.markdown("Welcome! Click 'Start' and speak into your microphone. Then stop recording and wait for analysis.")
 
-# Record audio from browser
-audio_bytes = audio_recorder(text="🎙 Click to record", icon_size="2x")
+st.warning("⚠️ This demo works best in Chrome. Allow microphone access when prompted.")
 
-if audio_bytes:
-    filename = "recorded_audio.wav"
-    with open(filename, "wb") as f:
-        f.write(audio_bytes)
-    st.success("✅ Audio successfully recorded!")
+# AudioProcessor to collect voice frames
+class AudioProcessor:
+    def __init__(self):
+        self.frames = []
 
-    # Transcribe audio to text
+    def recv(self, frame: av.AudioFrame) -> av.AudioFrame:
+        data = frame.to_ndarray()
+        self.frames.append(data)
+        return frame
+
+# Stream audio
+ctx = webrtc_streamer(
+    key="speech",
+    mode=WebRtcMode.SENDONLY,
+    in_audio=True,
+    audio_processor_factory=AudioProcessor,
+    media_stream_constraints={"audio": True, "video": False},
+)
+
+# After recording
+if ctx and ctx.state.playing:
+    st.info("🎙 Recording... Speak now!")
+elif ctx and not ctx.state.playing and ctx.audio_processor:
+    st.success("✅ Recording finished. Processing...")
+
+    # Save audio to WAV
+    audio_data = np.concatenate(ctx.audio_processor.frames, axis=0)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_wav:
+        with wave.open(tmp_wav.name, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(48000)
+            wf.writeframes(audio_data.tobytes())
+        audio_file = tmp_wav.name
+
+    # Transcribe
     recognizer = sr.Recognizer()
-    with sr.AudioFile(filename) as source:
-        audio_data = recognizer.record(source)
-
+    with sr.AudioFile(audio_file) as source:
+        audio = recognizer.record(source)
     try:
-        text = recognizer.recognize_google(audio_data, language="en")
+        text = recognizer.recognize_google(audio)
         st.markdown("**Transcription:**")
         st.code(text)
     except Exception as e:
-        st.error(f"Transcription Error: {e}")
+        st.error(f"Transcription error: {e}")
         text = ""
 
     # Sentiment analysis
     if text:
         sentiment_pipeline = pipeline("sentiment-analysis")
-        sentiment = sentiment_pipeline(text)
+        result = sentiment_pipeline(text)[0]
 
-        label = sentiment[0]['label'].lower()
-        score = sentiment[0]['score']
-        score_percent = f"{score * 100:.2f}%"
+        label = result["label"]
+        score = result["score"] * 100
 
-        if label == "positive":
-            color = "#d4edda"
-            emoji = "😊"
-            label_text = "Positive"
-        elif label == "negative":
-            color = "#f8d7da"
-            emoji = "😠"
-            label_text = "Negative"
-        else:
-            color = "#d1ecf1"
-            emoji = "😐"
-            label_text = "Neutral"
+        color = {
+            "POSITIVE": "#d4edda",
+            "NEGATIVE": "#f8d7da",
+            "NEUTRAL": "#d1ecf1"
+        }.get(label.upper(), "#eeeeee")
+
+        emoji = {
+            "POSITIVE": "😊",
+            "NEGATIVE": "😠",
+            "NEUTRAL": "😐"
+        }.get(label.upper(), "🤔")
 
         st.markdown(
             f"""
             <div style="background-color: {color}; padding: 20px; border-radius: 10px; border: 1px solid #ccc;">
-                <h4 style="margin-bottom: 10px;">🔍 Sentiment Analysis Result</h4>
-                <p style="font-size: 18px;"><strong>Sentiment:</strong> {label_text} {emoji}</p>
-                <p style="font-size: 18px;"><strong>Confidence Score:</strong> {score_percent}</p>
+                <h4>🔍 Sentiment Analysis Result</h4>
+                <p><strong>Sentiment:</strong> {label.title()} {emoji}</p>
+                <p><strong>Confidence:</strong> {score:.2f}%</p>
             </div>
             """,
             unsafe_allow_html=True
         )
+
 
 
 
