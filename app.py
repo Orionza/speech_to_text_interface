@@ -1,53 +1,27 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
-import av
-import numpy as np
-import wave
-import tempfile
+from audio_recorder_streamlit import audio_recorder
 import speech_recognition as sr
 from transformers import pipeline
+import tempfile
 
-# Streamlit ayarları
-st.set_page_config(page_title="🎤 Voice Sentiment Analysis", layout="centered")
+st.set_page_config(page_title="🎤 Voice Sentiment Analysis")
 st.title("🎤 Voice Sentiment Analysis")
-st.markdown("Welcome! Click the microphone below to record your speech and wait for the analysis to complete.")
+st.markdown("Click the microphone below to record your voice. Wait and let us analyze it!")
 
-# WebRTC ses çerçevesi işleyici
-class AudioProcessor:
-    def __init__(self):
-        self.frames = []
+# Mikrofonla kayıt
+audio_bytes = audio_recorder(pause_threshold=2.0, sample_rate=44100)
 
-    def recv(self, frame: av.AudioFrame) -> av.AudioFrame:
-        audio = frame.to_ndarray()
-        self.frames.append(audio)
-        return frame
+if audio_bytes:
+    st.success("✅ Audio recorded!")
 
-# WebRTC bileşeni
-ctx = webrtc_streamer(
-    key="speech",
-    mode=WebRtcMode.SENDONLY,
-    in_audio=True,
-    audio_processor_factory=AudioProcessor,
-    media_stream_constraints={"audio": True, "video": False},
-)
+    # Geçici WAV dosyası
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
 
-# Kaydın durumu kontrol ediliyor
-if ctx and not ctx.state.playing and ctx.audio_processor:
-    st.success("✅ Recording complete. Processing audio...")
-
-    # WAV olarak kaydet
-    audio_data = np.concatenate(ctx.audio_processor.frames, axis=0)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-        with wave.open(tmpfile.name, 'wb') as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)  # 16-bit
-            wf.setframerate(48000)
-            wf.writeframes(audio_data.tobytes())
-        audio_path = tmpfile.name
-
-    # Speech-to-text
+    # Transkripsiyon
     recognizer = sr.Recognizer()
-    with sr.AudioFile(audio_path) as source:
+    with sr.AudioFile(tmp_path) as source:
         audio = recognizer.record(source)
 
     try:
@@ -58,32 +32,23 @@ if ctx and not ctx.state.playing and ctx.audio_processor:
         st.error(f"Transcription failed: {e}")
         text = ""
 
-    # Duygu Analizi
+    # Duygu analizi
     if text:
-        st.markdown("### 💬 Sentiment Analysis Result")
-        sentiment = pipeline("sentiment-analysis")(text)[0]
+        sentiment_pipeline = pipeline("sentiment-analysis")
+        result = sentiment_pipeline(text)[0]
 
-        label = sentiment["label"]
-        score = sentiment["score"] * 100
+        label = result["label"]
+        score = result["score"] * 100
 
-        color = "#d1ecf1"
         emoji = "😐"
         if label.lower() == "positive":
-            color = "#d4edda"
             emoji = "😊"
         elif label.lower() == "negative":
-            color = "#f8d7da"
             emoji = "😠"
 
-        st.markdown(
-            f"""
-            <div style="background-color: {color}; padding: 15px; border-radius: 10px;">
-                <p><strong>Sentiment:</strong> {label.title()} {emoji}</p>
-                <p><strong>Confidence Score:</strong> {score:.2f}%</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown("### 💬 Sentiment Analysis")
+        st.markdown(f"**Sentiment:** {label} {emoji}  \n**Confidence:** {score:.2f}%")
+
 
 
 
