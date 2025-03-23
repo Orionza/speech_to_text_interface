@@ -5,66 +5,61 @@ import speech_recognition as sr
 from transformers import pipeline
 import torch
 
-# Streamlit başlık
-st.set_page_config(page_title="🎤 Sesli Duygu Analizi")
-st.title("🎤 İngilizce Sesli Duygu Analizi")
-st.markdown("Speech to text sentiment analysis")
+# Page settings
+st.set_page_config(page_title="🎤 Voice Sentiment Analysis", layout="centered")
+st.title("🎤 Voice Sentiment Analysis")
+st.markdown("Welcome! Click the microphone icon below to record your speech and wait for the analysis to complete.")
 
-# Ses kaydı başlat
-audio_bytes = audio_recorder(text=" Kayıt için mikrofona tıklayınız", icon_size="2x")
-
+# Record audio from browser
+audio_bytes = audio_recorder(text="🎙 Click to record", icon_size="2x")
 
 if audio_bytes:
-    filename = "kayit.wav"
+    filename = "recorded_audio.wav"
     with open(filename, "wb") as f:
         f.write(audio_bytes)
-    st.success("✅ Kayıt alındı!")
+    st.success("✅ Audio successfully recorded!")
 
-    # Transkripsiyon
+    # Transcribe audio to text
     recognizer = sr.Recognizer()
     with sr.AudioFile(filename) as source:
         audio_data = recognizer.record(source)
 
     try:
         text = recognizer.recognize_google(audio_data, language="en")
-        st.markdown("**Transkripsiyon:**")
+        st.markdown("**Transcription:**")
         st.code(text)
     except Exception as e:
-        st.error(f"Transkripsiyon hatası: {e}")
+        st.error(f"Transcription Error: {e}")
         text = ""
 
-    # Duygu analizi
+    # Sentiment analysis
     if text:
-        sentiment_pipeline = pipeline(
-            "sentiment-analysis",
-            model="cardiffnlp/twitter-xlm-roberta-base-sentiment",
-            framework="pt"
-        )
-
+        sentiment_pipeline = pipeline("sentiment-analysis")
         sentiment = sentiment_pipeline(text)
+
         label = sentiment[0]['label'].lower()
         score = sentiment[0]['score']
-        score_percent = f"%{score * 100:.2f}"
+        score_percent = f"{score * 100:.2f}%"
 
         if label == "positive":
             color = "#d4edda"
             emoji = "😊"
-            label_text = "Pozitif"
+            label_text = "Positive"
         elif label == "negative":
             color = "#f8d7da"
             emoji = "😠"
-            label_text = "Negatif"
+            label_text = "Negative"
         else:
             color = "#d1ecf1"
             emoji = "😐"
-            label_text = "Nötr"
+            label_text = "Neutral"
 
         st.markdown(
             f"""
             <div style="background-color: {color}; padding: 20px; border-radius: 10px; border: 1px solid #ccc;">
-                <h4 style="margin-bottom: 10px;">🔍 Duygu Analizi Sonucu</h4>
-                <p style="font-size: 18px;"><strong>Duygu:</strong> {label_text} {emoji}</p>
-                <p style="font-size: 18px;"><strong>Güven Skoru:</strong> {score_percent}</p>
+                <h4 style="margin-bottom: 10px;">🔍 Sentiment Analysis Result</h4>
+                <p style="font-size: 18px;"><strong>Sentiment:</strong> {label_text} {emoji}</p>
+                <p style="font-size: 18px;"><strong>Confidence Score:</strong> {score_percent}</p>
             </div>
             """,
             unsafe_allow_html=True
