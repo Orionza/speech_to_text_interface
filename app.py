@@ -48,7 +48,7 @@ if audio_bytes:
         elif label == "negative":
             bg_color = "#5c1b1b"  # koyu kırmızı
             emoji = "😠"
-        else:
+        elif label == "neutral":
             bg_color = "#1b3d5c"  # koyu mavi
             label = "neutral"
             emoji = "😐"
